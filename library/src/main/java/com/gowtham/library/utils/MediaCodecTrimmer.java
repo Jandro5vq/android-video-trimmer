@@ -31,6 +31,7 @@ public class MediaCodecTrimmer {
     private Context context;
     private final AtomicBoolean isCancelled = new AtomicBoolean(false);
     private final AtomicReference<String> currentOutputPath = new AtomicReference<>();
+    private MediaMuxerTrimmer fallbackTrimmer;
     
     public interface TrimmerCallback {
         void onSuccess(String outputPath);
@@ -41,6 +42,7 @@ public class MediaCodecTrimmer {
     
     public MediaCodecTrimmer(Context context) {
         this.context = context;
+        this.fallbackTrimmer = new MediaMuxerTrimmer(context);
     }
     
     /**
@@ -54,6 +56,20 @@ public class MediaCodecTrimmer {
      */
     public void trimVideo(String inputPath, String outputPath, long startTimeMs, long endTimeMs, 
                          CompressOption compressOption, TrimmerCallback callback) {
+        
+        try {
+            // Try Media3 Transformer first
+            trimWithTransformer(inputPath, outputPath, startTimeMs, endTimeMs, compressOption, callback);
+            
+        } catch (Exception e) {
+            LogMessage.w("Media3 Transformer failed, trying fallback: " + e.getMessage());
+            // Fallback to MediaMuxer approach
+            trimWithFallback(inputPath, outputPath, startTimeMs, endTimeMs, callback);
+        }
+    }
+    
+    private void trimWithTransformer(String inputPath, String outputPath, long startTimeMs, long endTimeMs, 
+                                   CompressOption compressOption, TrimmerCallback callback) {
         
         try {
             isCancelled.set(false);
@@ -74,7 +90,9 @@ public class MediaCodecTrimmer {
                     public void onError(Composition composition, ExportResult result, ExportException exception) {
                         if (!isCancelled.get()) {
                             LogMessage.e("Video transformation failed: " + exception.getMessage());
-                            callback.onError("Video processing failed: " + exception.getMessage());
+                            // Try fallback on error
+                            LogMessage.v("Trying fallback MediaMuxer approach");
+                            trimWithFallback(inputPath, outputPath, startTimeMs, endTimeMs, callback);
                         }
                     }
                 })
@@ -117,8 +135,47 @@ public class MediaCodecTrimmer {
             
         } catch (Exception e) {
             LogMessage.e("Error starting video transformation: " + e.getMessage());
-            callback.onError("Failed to start video processing: " + e.getMessage());
+            // Try fallback
+            trimWithFallback(inputPath, outputPath, startTimeMs, endTimeMs, callback);
         }
+    }
+    
+    private void trimWithFallback(String inputPath, String outputPath, long startTimeMs, long endTimeMs, 
+                                TrimmerCallback callback) {
+        
+        LogMessage.v("Using MediaMuxer fallback for video trimming");
+        
+        if (!MediaMuxerTrimmer.isSupported()) {
+            callback.onError("Video trimming not supported on this device");
+            return;
+        }
+        
+        // Convert milliseconds to microseconds for MediaExtractor
+        long startTimeUs = startTimeMs * 1000;
+        long endTimeUs = endTimeMs * 1000;
+        
+        fallbackTrimmer.trimVideo(inputPath, outputPath, startTimeUs, endTimeUs, 
+            new MediaMuxerTrimmer.MuxerCallback() {
+                @Override
+                public void onSuccess(String outputPath) {
+                    callback.onSuccess(outputPath);
+                }
+                
+                @Override
+                public void onProgress(int progress) {
+                    callback.onProgress(progress);
+                }
+                
+                @Override
+                public void onError(String error) {
+                    callback.onError(error);
+                }
+                
+                @Override
+                public void onCancelled() {
+                    callback.onCancelled();
+                }
+            });
     }
     
     /**
@@ -127,22 +184,24 @@ public class MediaCodecTrimmer {
     private void monitorProgress(TrimmerCallback callback) {
         new Thread(() -> {
             ProgressHolder progressHolder = new ProgressHolder();
+            boolean isMonitoring = true;
             
             try {
-                while (!isCancelled.get()) {
+                while (isMonitoring && !isCancelled.get()) {
                     Thread.sleep(500); // Check progress every 500ms
                     
                     @Transformer.ProgressState int progressState = transformer.getProgress(progressHolder);
                     
                     if (progressState == Transformer.PROGRESS_STATE_AVAILABLE) {
-                        int progress = (int) (progressHolder.progress * 100);
+                        int progress = Math.min(100, Math.max(0, (int) (progressHolder.progress * 100)));
                         callback.onProgress(progress);
                     } else if (progressState == Transformer.PROGRESS_STATE_NOT_STARTED) {
                         callback.onProgress(0);
+                    } else if (progressState == Transformer.PROGRESS_STATE_UNAVAILABLE) {
+                        // Transformation may have completed or failed
+                        // The listener callbacks will handle the result
+                        isMonitoring = false;
                     }
-                    
-                    // Check if transformation is complete or failed
-                    // The listener callbacks will handle completion/error cases
                 }
                 
             } catch (InterruptedException e) {
@@ -152,6 +211,7 @@ public class MediaCodecTrimmer {
                 }
             } catch (Exception e) {
                 if (!isCancelled.get()) {
+                    LogMessage.e("Error monitoring progress: " + e.getMessage());
                     callback.onError("Error monitoring progress: " + e.getMessage());
                 }
             }
@@ -171,6 +231,9 @@ public class MediaCodecTrimmer {
             } catch (Exception e) {
                 LogMessage.e("Error cancelling transformation: " + e.getMessage());
             }
+        }
+        if (fallbackTrimmer != null) {
+            fallbackTrimmer.cancel();
         }
     }
     
