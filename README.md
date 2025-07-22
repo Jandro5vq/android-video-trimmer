@@ -3,16 +3,25 @@
 
 ### Deprecated:
 
-This library is deprecated, it was depended on [ffmpeg-kit](https://github.com/arthenica/ffmpeg-kit?tab=readme-ov-file). Since ffmpeg-kit has been removed, due to ffmpeg license issue. 
-hereafter, users will encounter a "failed to resolve" issue. 
+~~This library is deprecated, it was depended on [ffmpeg-kit](https://github.com/arthenica/ffmpeg-kit?tab=readme-ov-file). Since ffmpeg-kit has been removed, due to ffmpeg license issue. 
+hereafter, users will encounter a "failed to resolve" issue.~~
 
-### Solution: 
+### Solution: ✅ FIXED
 
-Replace video processing part with [Media3 library](https://android-developers.googleblog.com/2025/03/media-processing-performance-jetpack-media3-transformer.html)  / [LiTr library](https://github.com/linkedin/LiTr)
-or
-Use ffmpeg-kit and this library locally
+**This library has been updated to replace the deprecated ffmpeg-kit with Media3 Transformer API**
 
-Sorry for the inconvenience.
+The video processing functionality now uses:
+- **Media3 Transformer API** for modern, efficient video processing
+- **MediaCodec** under the hood for hardware-accelerated encoding
+- **Official Android libraries** instead of deprecated third-party dependencies
+
+### What Changed:
+- ✅ Removed deprecated `ffmpeg-kit-min:6.0-1` dependency
+- ✅ Added `androidx.media3:media3-transformer:1.2.1` for video processing
+- ✅ Replaced FFmpeg command execution with MediaCodec-based trimming
+- ✅ Maintained all existing functionality and API compatibility
+- ✅ Improved performance with hardware acceleration
+- ✅ Better Android version compatibility
 
 
 # Android-video-trimmer
@@ -173,6 +182,10 @@ TrimVideo.activity(videoUri)
 -dontwarn com.gowtham.library**
 -keep class com.gowtham.library** { *; }
 -keep interface com.gowtham.library** { *; }
+
+# Media3 Transformer rules for video processing  
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
 ```
 
 ## Compatibility
@@ -186,19 +199,24 @@ This library is licensed under the MIT License.
 
 ## FFmpeg Notice
 
-This library uses FFmpeg, which is licensed under the LGPL v3.0. 
+~~This library uses FFmpeg, which is licensed under the LGPL v3.0.~~
 
-### Obtaining FFmpeg Source Code
+## Media3 Notice
 
-You can obtain the source code for FFmpeg from https://github.com/arthenica/ffmpeg-kit 
+This library now uses **Media3 Transformer API** which is part of AndroidX Media3 library, licensed under the Apache License 2.0.
 
-### Relinking Instructions
+### Benefits of Media3 Transformer:
+- **Hardware Acceleration**: Uses MediaCodec for efficient video processing
+- **Better Performance**: Optimized for Android devices
+- **Official Support**: Maintained by Google Android team
+- **Future-Proof**: Actively developed and updated
+- **License Compatibility**: Apache 2.0 license is more permissive
 
-If you wish to replace or modify the FFmpeg library used in this project, follow these steps:
-
-1. Obtain the modified version of FFmpeg.
-2. Replace the existing FFmpeg library maven url in the `library/build.gradle` directory.
-3. Rebuild the project.
+### Technical Details:
+- Video trimming is handled by `MediaCodecTrimmer` class
+- Uses `androidx.media3.transformer.Transformer` for video processing
+- Supports the same trimming modes as before (default, accurate, compression)
+- Maintains async processing with progress callbacks
   
 ## Support 
 Show your support by giving a star to this repository. 

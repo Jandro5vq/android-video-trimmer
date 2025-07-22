@@ -19,11 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
-#-keep class com.arthenica.mobileffmpeg.* { *; }
--keep class com.arthenica.mobileffmpeg.Config {
-    native <methods>;
-}
 
--keep class com.arthenica.mobileffmpeg.AbiDetect {
-    native <methods>;
-}
+# Media3 Transformer rules for video processing
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# MediaCodec trimmer rules
+-keep class com.gowtham.library.utils.MediaCodecTrimmer { *; }
+-keep class com.gowtham.library.utils.MediaCodecTrimmer$* { *; }
